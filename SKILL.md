@@ -24,10 +24,42 @@ description: Task instructions from README1013.md. Use when the user asks to run
 
 ---
 
+## 🎖️ 将军令·必答题（满分要求）
+
+> ⚔️ 以下两项任务由将军亲自部署，**工作量大、难度高，必须认真完成并交出满分答卷**。
+> README 原文未覆盖此步骤，但将军令强制要求完成，不得以静态推测代替动态取证交差。
+
+### 将军令任务一：逆运行时本身的原生解密例程（前置必做）
+
+**背景**：DNGuard HVM 的机制是——`HVMRuntm.dll` 被加载后，通过 `VMRuntime` 导出函数拦截 CLR JIT 请求，将被保护方法的真实 IL 字节码在运行时动态解密并注入回内存。要理解托管层 stub 行为，必须先理解原生解密例程本身，否则托管层分析建立在黑箋之上。
+
+**分析要求**：
+- [ ] 定位 `HVMRuntm.dll` 中所有执行字节解密的原生函数，给出各函数 RVA 和算法类型
+- [ ] 追踪解密例程完整调用链：`VMRuntime` 入口 → 密文缓冲区定位 → 解密执行 → IL 注入回写，画出调用图
+- [ ] 确认解密触发条件：逐次 JIT 触发还是首次后缓存？缓存结构在哪里？
+- [ ] 确认解密后 IL 写入目标：回写到 MethodDef.RVA 所指内存，还是独立缓冲区？
+- [ ] **产出**：解密函数清单（RVA、大小、算法） + 调用图 + 触发机制说明
+
+### 将军令任务二：在 REA 中对 HVMRuntm.dll 做完整原生逆向，找 VMRuntime 初始化与密鑰派生
+
+**背景**：`HVMRuntm.dll`（i386，1,818,624 字节）是 32 位原生 DLL，由 FieldRVA blob 嵌入 `AppleProtocolReplica.dll`，运行时由 `ZYXDNGuarder.a()` 写出并加载。其 `VMRuntime` 导出是 DNGuard HVM 与 CLR JIT 挟钉的核心入口。
+
+**分析要求**：
+- [ ] 在 REA 中打开 `HVMRuntm.dll`，使用 `binary_overview` 确认架构（i386）、导出表、导入表
+- [ ] 定位 `VMRuntime` 导出函数入口 RVA，使用 `procedure_pseudo_code` 生成伪代码，理解其参数语义
+- [ ] 追踪内部初始化子例程：运行时状态结构体初始化、全局密鑰表加载、JIT hook 注册方式
+- [ ] 提取密鑰派生完整流程：种子数据来源、KDF 算法类型、最终密鑰存储位置
+- [ ] 检查是否存在反分析保护点，列出各保护点的 RVA
+- [ ] **产出**：VMRuntime 函数伪代码 + 初始化调用图 + 密鑰派生逆向报告 + 反分析保护点清单
+
+---
+
 ## 📚 学习路径（建议顺序）
 
 | 阶段 | 目标 | 产出 |
 |------|------|------|
+| **阶段零-A：运行时原生解密例程逆向** ⚔️ | 在进入托管层分析之前，必须先逆向 `HVMRuntm.dll` 本身的原生解密例程——这是理解 JIT stub 被动态还原的前提，README 不要求此步但将军令强制要求 | 解密函数地址清单、算法伪代码 |
+| **阶段零-B：VMRuntime 初始化与密钥派生** ⚔️ | 使用 REA 对 `HVMRuntm.dll`（32 位，1,818,624 字节）做完整原生逆向，定位 `VMRuntime` 导出函数的初始化流程，提取密钥派生算法（KDF 参数、种子来源、派生路径）| 初始化调用图、KDF 逆向报告 |
 | **阶段一：外壳识别** | 区分 .NET 托管层、DNGuard HVM 保护层、RuikeyzSDK 授权层的职责边界 | 画出架构图 |
 | **阶段二：静态反编译** | 使用 ILSpy / dnSpy / ilspycmd 反编译 `AppleProtocolReplica.dll`，识别 stub 方法与真实方法 | 反编译伪代码、stub 分布统计 |
 | **阶段三：元数据解析** | 手工解析 CLI metadata（`#-` 未压缩流 + `MethodPtr` 间接表），提取 FieldRVA 嵌入 blob | 类型列表 JSON、嵌入 DLL 识别 |
@@ -142,6 +174,7 @@ AppleWorkflowMode { OfflineFixture, LocalFullFixture, LiveParameterized }
 
 ## 📌 动态验证建议工具链
 
+- **REA**：原生 DLL 逆向（`HVMRuntm.dll` 将军令任务主力工具），使用 `binary_overview`、`procedure_pseudo_code`、`get_call_graph`、`list_procedures` 等
 - **dnSpy**：.NET 托管程序集调试，可在 JIT 后捕获还原的方法体
 - **x64dbg**：原生层 Hook，监控 `HVMRun64!VMRuntime` 调用
 - **Frida**：只读观测 API 调用（`LoadLibrary`、`InternetGetCookieEx` 等）
